@@ -177,9 +177,13 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# UPDATED CORS: Allow your Vercel frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "https://ai-retention-platform.vercel.app",  # Your Vercel URL
+        "*"  # Keep for development/testing
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -273,7 +277,7 @@ def predict_churn(customer: CustomerInput):
         raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
 
 # ------------------------------
-# 9. New Endpoint: Predict + Save to Supabase
+# 9. Predict + Save to Supabase
 # ------------------------------
 @app.post("/predict-and-save")
 def predict_and_save(customer: CustomerInput, customer_name: str = None, customer_email: str = None):
