@@ -159,7 +159,7 @@ def get_human_reasons(df_encoded, shap_values, feature_names, top_n=3):
         return ["AI explanation temporarily unavailable."]
 
 # ------------------------------
-# 6. FastAPI App with PROPER CORS
+# 6. FastAPI App with CORS
 # ------------------------------
 app = FastAPI(
     title="AI Customer Retention Platform API",
@@ -167,7 +167,6 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Allow all origins (for development)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -200,7 +199,45 @@ class PredictionResponse(BaseModel):
     recommendation: str
 
 # ------------------------------
-# 8. Endpoints
+# 8. CUSTOMER ENDPOINTS (NEW)
+# ------------------------------
+@app.get("/customers")
+def get_all_customers():
+    """Fetch all customers from Supabase."""
+    if not supabase:
+        raise HTTPException(status_code=503, detail="Database not connected")
+    try:
+        response = supabase.table("customers").select("*").execute()
+        return {"customers": response.data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/customers/{customer_id}")
+def get_customer_by_id(customer_id: int):
+    """Fetch a single customer by ID from Supabase."""
+    if not supabase:
+        raise HTTPException(status_code=503, detail="Database not connected")
+    try:
+        response = supabase.table("customers").select("*").eq("id", customer_id).execute()
+        if not response.data:
+            raise HTTPException(status_code=404, detail="Customer not found")
+        return response.data[0]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/customers/{customer_id}/predictions")
+def get_customer_predictions(customer_id: int):
+    """Fetch prediction history for a customer."""
+    if not supabase:
+        raise HTTPException(status_code=503, detail="Database not connected")
+    try:
+        response = supabase.table("predictions").select("*").eq("customer_id", customer_id).order("predicted_at", desc=True).execute()
+        return {"predictions": response.data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ------------------------------
+# 9. PREDICTION ENDPOINTS
 # ------------------------------
 @app.get("/")
 def root():
