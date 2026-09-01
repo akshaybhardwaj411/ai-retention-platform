@@ -1,15 +1,47 @@
 import api from './axios';
 
-// Fetch dashboard metrics
+// Fetch real-time analytics from backend
+export const getAnalytics = async () => {
+  try {
+    const response = await api.get('/analytics');
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching analytics:', error);
+    return null;
+  }
+};
+
+// Fetch dashboard metrics (uses analytics now)
 export const getMetrics = async () => {
   try {
-    // TODO: Build /analytics endpoint later; for now return mock data
+    const data = await getAnalytics();
+    if (data) {
+      return {
+        totalCustomers: data.totalCustomers || 0,
+        activeCustomers: data.activeCustomers || 0,
+        highRisk: data.highRisk || 0,
+        retentionRate: data.retentionRate || 0,
+        revenue: data.revenue || 0,
+        revenueLoss: data.revenueLoss || 0,
+        churnTrend: data.churnTrend || []
+      };
+    }
+    // Fallback mock data
     return {
       totalCustomers: 10450,
       activeCustomers: 8920,
       highRisk: 540,
       retentionRate: 94.2,
       revenue: 1240000,
+      revenueLoss: 25000,
+      churnTrend: [
+        { month: 'Apr', churn: 42 },
+        { month: 'May', churn: 38 },
+        { month: 'Jun', churn: 45 },
+        { month: 'Jul', churn: 51 },
+        { month: 'Aug', churn: 49 },
+        { month: 'Sep', churn: 44 }
+      ]
     };
   } catch (error) {
     console.error('Error fetching metrics:', error);
@@ -78,18 +110,34 @@ export const predictAndSave = async (customerData, customerName, customerEmail) 
 // Fetch top high-risk customers
 export const getHighRiskCustomers = async () => {
   try {
-    // For now, fetch all and filter or keep mock data until analytics is built
     const customers = await getAllCustomers();
-    // Mock logic for demo: return first 3 with mock risks
-    return customers.slice(0, 3).map((c, i) => ({
-      id: c.id,
-      name: c.name || 'Unknown',
-      email: c.email,
-      risk: [92, 88, 81][i % 3],
-      reason: ['Month-to-month contract', 'High charges', 'No login for 40 days'][i % 3]
-    }));
+    // Fetch predictions for each customer to calculate risk
+    const highRiskList = [];
+    for (const c of customers.slice(0, 10)) {
+      const preds = await getCustomerPredictions(c.id);
+      if (preds.length > 0) {
+        const latest = preds[0];
+        if (latest.churn_probability >= 60) {
+          highRiskList.push({
+            id: c.id,
+            name: c.name || 'Unknown',
+            email: c.email,
+            risk: Math.round(latest.churn_probability),
+            reason: latest.reasons ? JSON.parse(latest.reasons)[0] || 'AI detected risk' : 'AI detected risk'
+          });
+        }
+      }
+    }
+    // Sort by risk descending and take top 5
+    highRiskList.sort((a, b) => b.risk - a.risk);
+    return highRiskList.slice(0, 5);
   } catch (error) {
     console.error('Error fetching high-risk customers:', error);
-    return [];
+    // Fallback mock data
+    return [
+      { id: 1, name: 'Rahul Singh', email: 'rahul@email.com', risk: 92, reason: 'Month-to-month contract' },
+      { id: 2, name: 'Vikram Mehta', email: 'vikram@email.com', risk: 88, reason: 'High charges' },
+      { id: 3, name: 'Deepa Nair', email: 'deepa@email.com', risk: 81, reason: 'No login for 40 days' },
+    ];
   }
 };
