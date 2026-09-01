@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-// Replace with your actual Render backend URL
-const BASE_URL = 'https://ai-retention-backend.onrender.com';
+// CORRECT URL: Your Render backend base URL
+const BASE_URL = 'https://ai-retention-platform.onrender.com';
 
 const api = axios.create({
   baseURL: BASE_URL,
