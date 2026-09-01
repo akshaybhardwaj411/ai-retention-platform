@@ -3,9 +3,7 @@ import api from './axios';
 // Fetch dashboard metrics
 export const getMetrics = async () => {
   try {
-    // For now, we'll fetch from /analytics endpoint
-    // We need to build this endpoint in backend later
-    // For now, return mock data until we build the /analytics endpoint
+    // TODO: Build /analytics endpoint later; for now return mock data
     return {
       totalCustomers: 10450,
       activeCustomers: 8920,
@@ -22,8 +20,7 @@ export const getMetrics = async () => {
 // Fetch top high-risk customers
 export const getHighRiskCustomers = async () => {
   try {
-    // We'll build a /high-risk endpoint later
-    // For now, return mock data
+    // TODO: Build /high-risk endpoint later; for now return mock data
     return [
       { id: 1, name: 'Rahul Singh', email: 'rahul@email.com', risk: 92, reason: 'Month-to-month contract' },
       { id: 2, name: 'Vikram Mehta', email: 'vikram@email.com', risk: 88, reason: 'High charges' },
@@ -60,7 +57,7 @@ export const predictAndSave = async (customerData, customerName, customerEmail) 
   }
 };
 
-// Fetch customer by ID
+// Fetch customer by ID (for profile page)
 export const getCustomerById = async (id) => {
   try {
     const response = await api.get(`/customers/${id}`);
