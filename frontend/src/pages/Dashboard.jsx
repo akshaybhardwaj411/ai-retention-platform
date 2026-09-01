@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { getMetrics, getHighRiskCustomers } from '../api/services';
-import api from '../api/axios'; // <-- Import the axios instance
+import api from '../api/axios';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from 'recharts';
 
 const Dashboard = () => {
@@ -15,7 +16,6 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // State for AI Prediction Tester
   const [testCustomer, setTestCustomer] = useState({
     gender: 'Male',
     SeniorCitizen: 0,
@@ -55,7 +55,6 @@ const Dashboard = () => {
     fetchData();
   }, []);
 
-  // Sample churn trend data
   const churnData = [
     { month: 'Apr', churn: 42 },
     { month: 'May', churn: 38 },
@@ -65,7 +64,6 @@ const Dashboard = () => {
     { month: 'Sep', churn: 44 },
   ];
 
-  // Handle AI Prediction Test using the axios instance
   const handlePredict = async () => {
     try {
       setPredicting(true);
@@ -177,7 +175,7 @@ const Dashboard = () => {
         </ResponsiveContainer>
       </div>
 
-      {/* Top High Risk Customers */}
+      {/* Top High Risk Customers with Clickable Links */}
       <div className="bg-white p-4 rounded-lg shadow-md">
         <h2 className="font-semibold text-lg mb-4">🔥 Top High Risk Customers</h2>
         {topRisky.length === 0 ? (
@@ -196,7 +194,11 @@ const Dashboard = () => {
               <tbody>
                 {topRisky.map((c) => (
                   <tr key={c.id} className="border-t hover:bg-gray-50 transition">
-                    <td className="p-3 font-medium">{c.name}</td>
+                    <td className="p-3 font-medium">
+                      <Link to={`/customer/${c.id}`} className="text-indigo-600 hover:underline">
+                        {c.name}
+                      </Link>
+                    </td>
                     <td className="p-3 text-gray-600">{c.email}</td>
                     <td className="p-3">
                       <span className={`px-3 py-1 rounded-full text-white text-sm font-medium ${
