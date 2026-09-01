@@ -17,17 +17,35 @@ export const getMetrics = async () => {
   }
 };
 
-// Fetch top high-risk customers
-export const getHighRiskCustomers = async () => {
+// Fetch all customers from the backend
+export const getAllCustomers = async () => {
   try {
-    // TODO: Build /high-risk endpoint later; for now return mock data
-    return [
-      { id: 1, name: 'Rahul Singh', email: 'rahul@email.com', risk: 92, reason: 'Month-to-month contract' },
-      { id: 2, name: 'Vikram Mehta', email: 'vikram@email.com', risk: 88, reason: 'High charges' },
-      { id: 3, name: 'Deepa Nair', email: 'deepa@email.com', risk: 81, reason: 'No login for 40 days' },
-    ];
+    const response = await api.get('/customers');
+    return response.data.customers || [];
   } catch (error) {
-    console.error('Error fetching high-risk customers:', error);
+    console.error('Error fetching customers:', error);
+    return [];
+  }
+};
+
+// Fetch a single customer by ID
+export const getCustomerById = async (id) => {
+  try {
+    const response = await api.get(`/customers/${id}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching customer:', error);
+    return null;
+  }
+};
+
+// Fetch prediction history for a customer
+export const getCustomerPredictions = async (id) => {
+  try {
+    const response = await api.get(`/customers/${id}/predictions`);
+    return response.data.predictions || [];
+  } catch (error) {
+    console.error('Error fetching predictions:', error);
     return [];
   }
 };
@@ -57,13 +75,21 @@ export const predictAndSave = async (customerData, customerName, customerEmail) 
   }
 };
 
-// Fetch customer by ID (for profile page)
-export const getCustomerById = async (id) => {
+// Fetch top high-risk customers
+export const getHighRiskCustomers = async () => {
   try {
-    const response = await api.get(`/customers/${id}`);
-    return response.data;
+    // For now, fetch all and filter or keep mock data until analytics is built
+    const customers = await getAllCustomers();
+    // Mock logic for demo: return first 3 with mock risks
+    return customers.slice(0, 3).map((c, i) => ({
+      id: c.id,
+      name: c.name || 'Unknown',
+      email: c.email,
+      risk: [92, 88, 81][i % 3],
+      reason: ['Month-to-month contract', 'High charges', 'No login for 40 days'][i % 3]
+    }));
   } catch (error) {
-    console.error('Error fetching customer:', error);
-    return null;
+    console.error('Error fetching high-risk customers:', error);
+    return [];
   }
 };
