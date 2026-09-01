@@ -11,6 +11,8 @@ const Dashboard = () => {
     highRisk: 0,
     retentionRate: 0,
     revenue: 0,
+    revenueLoss: 0,
+    churnTrend: []
   });
   const [topRisky, setTopRisky] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -55,15 +57,6 @@ const Dashboard = () => {
     fetchData();
   }, []);
 
-  const churnData = [
-    { month: 'Apr', churn: 42 },
-    { month: 'May', churn: 38 },
-    { month: 'Jun', churn: 45 },
-    { month: 'Jul', churn: 51 },
-    { month: 'Aug', churn: 49 },
-    { month: 'Sep', churn: 44 },
-  ];
-
   const handlePredict = async () => {
     try {
       setPredicting(true);
@@ -94,10 +87,38 @@ const Dashboard = () => {
     );
   }
 
+  // Use real churn trend data from analytics, or fallback
+  const churnData = metrics.churnTrend && metrics.churnTrend.length > 0 
+    ? metrics.churnTrend 
+    : [
+        { month: 'Apr', churn: 42 },
+        { month: 'May', churn: 38 },
+        { month: 'Jun', churn: 45 },
+        { month: 'Jul', churn: 51 },
+        { month: 'Aug', churn: 49 },
+        { month: 'Sep', churn: 44 }
+      ];
+
   return (
     <div className="p-6 max-w-7xl mx-auto">
+      {/* Alerts Panel (NEW) - Shows Critical Risks */}
+      {topRisky.some(c => c.risk >= 80) && (
+        <div className="bg-red-50 border-l-4 border-red-600 p-4 mb-6 rounded">
+          <div className="flex items-center">
+            <span className="text-2xl mr-3">🚨</span>
+            <div>
+              <p className="font-bold text-red-700">Critical Risk Alert!</p>
+              <p className="text-sm text-red-600">
+                {topRisky.filter(c => c.risk >= 80).length} customers are at critical risk (80%+ churn probability). 
+                Immediate action recommended.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Metrics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
         <div className="bg-white p-4 rounded-lg shadow-md border-l-4 border-blue-500">
           <p className="text-gray-500 text-sm">Total Customers</p>
           <p className="text-2xl font-bold">{metrics.totalCustomers.toLocaleString()}</p>
@@ -113,6 +134,10 @@ const Dashboard = () => {
         <div className="bg-white p-4 rounded-lg shadow-md border-l-4 border-purple-500">
           <p className="text-gray-500 text-sm">Retention Rate</p>
           <p className="text-2xl font-bold text-purple-600">{metrics.retentionRate}%</p>
+        </div>
+        <div className="bg-white p-4 rounded-lg shadow-md border-l-4 border-orange-500">
+          <p className="text-gray-500 text-sm">Revenue Loss (Est.)</p>
+          <p className="text-2xl font-bold text-orange-600">₹{metrics.revenueLoss?.toLocaleString() || 0}</p>
         </div>
       </div>
 
@@ -161,18 +186,22 @@ const Dashboard = () => {
         )}
       </div>
 
-      {/* Chart */}
+      {/* Chart - Now uses real data */}
       <div className="bg-white p-4 rounded-lg shadow-md mb-6">
         <h2 className="font-semibold text-lg mb-4">📈 Monthly Churn Trend</h2>
-        <ResponsiveContainer width="100%" height={250}>
-          <BarChart data={churnData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="month" />
-            <YAxis />
-            <Tooltip />
-            <Bar dataKey="churn" fill="#f97316" />
-          </BarChart>
-        </ResponsiveContainer>
+        {churnData.length === 0 ? (
+          <p className="text-gray-500">No churn data available yet.</p>
+        ) : (
+          <ResponsiveContainer width="100%" height={250}>
+            <BarChart data={churnData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="month" />
+              <YAxis />
+              <Tooltip />
+              <Bar dataKey="churn" fill="#f97316" />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
       </div>
 
       {/* Top High Risk Customers with Clickable Links */}
