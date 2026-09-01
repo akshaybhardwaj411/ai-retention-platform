@@ -43,7 +43,7 @@ except Exception as e:
     print(f"⚠️ SHAP not available (proceeding without explanations): {e}")
 
 # ------------------------------
-# 3. Supabase Connection (from environment variables)
+# 3. Supabase Connection
 # ------------------------------
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
@@ -57,16 +57,12 @@ if SUPABASE_URL and SUPABASE_KEY:
         print(f"⚠️ Supabase connection failed: {e}")
 else:
     supabase = None
-    print("⚠️ Supabase environment variables not set. Database features disabled.")
+    print("⚠️ Supabase environment variables not set.")
 
 # ------------------------------
 # 4. Preprocessing Function
 # ------------------------------
 def preprocess_customer(input_dict):
-    """
-    Converts raw JSON into the exact feature set the model expects.
-    """
-    # Default template with ALL possible columns
     default_data = {
         'gender': 'Male',
         'SeniorCitizen': 0,
@@ -89,17 +85,13 @@ def preprocess_customer(input_dict):
         'TotalCharges': 0.0
     }
     
-    # Override defaults with user input
     for key, value in input_dict.items():
         default_data[key] = value
     
     df = pd.DataFrame([default_data])
-    
-    # Fix TotalCharges
     df['TotalCharges'] = pd.to_numeric(df['TotalCharges'], errors='coerce')
     df['TotalCharges'] = df['TotalCharges'].fillna(0)
     
-    # One-hot encoding
     categorical_cols = [
         'gender', 'Partner', 'Dependents', 'PhoneService', 'MultipleLines',
         'InternetService', 'OnlineSecurity', 'OnlineBackup', 'DeviceProtection',
@@ -108,17 +100,15 @@ def preprocess_customer(input_dict):
     ]
     df_encoded = pd.get_dummies(df, columns=categorical_cols, drop_first=True)
     
-    # Ensure all expected columns exist
     for col in expected_features:
         if col not in df_encoded.columns:
             df_encoded[col] = 0
     
-    # Reorder
     df_encoded = df_encoded[expected_features]
     return df_encoded
 
 # ------------------------------
-# 5. Helper Functions (Risk, SHAP reasons)
+# 5. Helper Functions
 # ------------------------------
 def get_risk_category(probability):
     if probability < 0.30:
@@ -169,7 +159,7 @@ def get_human_reasons(df_encoded, shap_values, feature_names, top_n=3):
         return ["AI explanation temporarily unavailable."]
 
 # ------------------------------
-# 6. FastAPI App
+# 6. FastAPI App with PROPER CORS
 # ------------------------------
 app = FastAPI(
     title="AI Customer Retention Platform API",
@@ -177,13 +167,10 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# UPDATED CORS: Allow your Vercel frontend
+# Allow all origins (for development)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://ai-retention-platform.vercel.app",  # Your Vercel URL
-        "*"  # Keep for development/testing
-    ],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -227,21 +214,13 @@ def health():
 def predict_churn(customer: CustomerInput):
     try:
         input_dict = customer.dict()
-        
-        # Preprocess
         processed_df = preprocess_customer(input_dict)
-        
-        # Scale
         scaled_data = scaler.transform(processed_df)
-        
-        # Predict
         prob = model.predict_proba(scaled_data)[0][1]
         prob_percent = prob * 100
         
-        # Risk
         risk_info = get_risk_category(prob)
         
-        # SHAP Reasons (with fallback)
         shap_vals = None
         if shap_available and explainer is not None:
             try:
@@ -250,7 +229,6 @@ def predict_churn(customer: CustomerInput):
                 shap_vals = None
         reasons = get_human_reasons(processed_df, shap_vals, expected_features)
         
-        # Recommendation
         recommendation = risk_info['action']
         reasons_text = " ".join(reasons).lower()
         if "contract" in reasons_text:
@@ -276,27 +254,16 @@ def predict_churn(customer: CustomerInput):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
 
-# ------------------------------
-# 9. Predict + Save to Supabase
-# ------------------------------
 @app.post("/predict-and-save")
 def predict_and_save(customer: CustomerInput, customer_name: str = None, customer_email: str = None):
-    """
-    Predict churn AND save the result to Supabase database.
-    """
     try:
-        # Step 1: Get prediction (reuse the existing logic)
-        result = predict_churn(customer)  # This returns a PredictionResponse object
-        
-        # Step 2: Create or get customer (only if email provided)
+        result = predict_churn(customer)
         customer_id = None
         if customer_email and supabase:
-            # Check if customer exists
             existing = supabase.table("customers").select("*").eq("email", customer_email).execute()
             if existing.data:
                 customer_id = existing.data[0]['id']
             else:
-                # Insert new customer
                 new_customer = {
                     "name": customer_name or "Unknown",
                     "email": customer_email,
@@ -317,7 +284,6 @@ def predict_and_save(customer: CustomerInput, customer_name: str = None, custome
                 if inserted.data:
                     customer_id = inserted.data[0]['id']
         
-        # Step 3: Save prediction (if we have a customer_id and supabase is connected)
         saved = False
         if supabase and customer_id:
             prediction_data = {
@@ -330,7 +296,6 @@ def predict_and_save(customer: CustomerInput, customer_name: str = None, custome
             supabase.table("predictions").insert(prediction_data).execute()
             saved = True
         
-        # Step 4: Return combined response
         return {
             **result.dict(),
             "customer_id": customer_id,
