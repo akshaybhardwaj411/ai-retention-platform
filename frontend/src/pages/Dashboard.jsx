@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { getMetrics, getHighRiskCustomers } from '../api/services';
+import api from '../api/axios'; // <-- Import the axios instance
 import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from 'recharts';
 
 const Dashboard = () => {
@@ -54,7 +55,7 @@ const Dashboard = () => {
     fetchData();
   }, []);
 
-  // Sample churn trend data (will be replaced with real analytics later)
+  // Sample churn trend data
   const churnData = [
     { month: 'Apr', churn: 42 },
     { month: 'May', churn: 38 },
@@ -64,17 +65,12 @@ const Dashboard = () => {
     { month: 'Sep', churn: 44 },
   ];
 
-  // Handle AI Prediction Test
+  // Handle AI Prediction Test using the axios instance
   const handlePredict = async () => {
     try {
       setPredicting(true);
-      const response = await fetch('https://ai-retention-backend.onrender.com/predict', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(testCustomer)
-      });
-      const data = await response.json();
-      setPredictionResult(data);
+      const response = await api.post('/predict', testCustomer);
+      setPredictionResult(response.data);
     } catch (error) {
       console.error('Prediction error:', error);
       alert('Failed to get prediction. Is your backend running?');
