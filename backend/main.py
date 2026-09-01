@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List
 from supabase import create_client, Client
+from datetime import datetime, timedelta
 
 # ------------------------------
 # 1. Load Models
@@ -199,11 +200,95 @@ class PredictionResponse(BaseModel):
     recommendation: str
 
 # ------------------------------
-# 8. CUSTOMER ENDPOINTS (NEW)
+# 8. ANALYTICS ENDPOINT (NEW)
+# ------------------------------
+@app.get("/analytics")
+def get_analytics():
+    """Fetch real-time analytics from the database."""
+    if not supabase:
+        raise HTTPException(status_code=503, detail="Database not connected")
+    
+    try:
+        # Fetch all customers
+        customers_resp = supabase.table("customers").select("*").execute()
+        customers = customers_resp.data
+        total_customers = len(customers)
+        
+        # Fetch all predictions (latest per customer)
+        predictions_resp = supabase.table("predictions").select("*").execute()
+        predictions = predictions_resp.data
+        
+        # Calculate metrics
+        high_risk_count = 0
+        critical_risk_count = 0
+        total_revenue = 0
+        active_count = 0
+        
+        # Get latest prediction per customer
+        latest_preds = {}
+        for p in predictions:
+            cid = p['customer_id']
+            if cid not in latest_preds or p['predicted_at'] > latest_preds[cid]['predicted_at']:
+                latest_preds[cid] = p
+        
+        # Count risks and revenue
+        for c in customers:
+            total_revenue += c.get('total_charges', 0)
+            # Consider active if tenure > 0 (simplified)
+            if c.get('tenure', 0) > 0:
+                active_count += 1
+            
+            # Check risk from predictions
+            if c['id'] in latest_preds:
+                prob = latest_preds[c['id']]['churn_probability']
+                if prob >= 80:
+                    critical_risk_count += 1
+                    high_risk_count += 1
+                elif prob >= 60:
+                    high_risk_count += 1
+        
+        # Generate churn trend (last 6 months)
+        churn_trend = []
+        end_date = datetime.now()
+        for i in range(5, -1, -1):
+            month_date = end_date - timedelta(days=30*i)
+            month_key = month_date.strftime("%b")
+            # Simulate churn data based on predictions or random (for demo)
+            # In a production system, you'd have actual churn events
+            churn_trend.append({
+                "month": month_key,
+                "churn": max(0, 30 + i * 2 + np.random.randint(-5, 5))
+            })
+        
+        # Revenue loss (estimated based on high-risk customers)
+        revenue_loss = 0
+        for cid in latest_preds:
+            if latest_preds[cid]['churn_probability'] >= 60:
+                # Find customer to get monthly charges
+                cust = next((c for c in customers if c['id'] == cid), None)
+                if cust:
+                    revenue_loss += cust.get('monthly_charges', 0) * 3  # 3 months loss
+        
+        return {
+            "totalCustomers": total_customers,
+            "activeCustomers": active_count,
+            "highRisk": high_risk_count,
+            "criticalRisk": critical_risk_count,
+            "retentionRate": round((active_count / total_customers * 100) if total_customers > 0 else 0, 2),
+            "revenue": round(total_revenue, 2),
+            "revenueLoss": round(revenue_loss, 2),
+            "churnTrend": churn_trend,
+            "predictionsCount": len(predictions)
+        }
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ------------------------------
+# 9. CUSTOMER ENDPOINTS
 # ------------------------------
 @app.get("/customers")
 def get_all_customers():
-    """Fetch all customers from Supabase."""
     if not supabase:
         raise HTTPException(status_code=503, detail="Database not connected")
     try:
@@ -214,7 +299,6 @@ def get_all_customers():
 
 @app.get("/customers/{customer_id}")
 def get_customer_by_id(customer_id: int):
-    """Fetch a single customer by ID from Supabase."""
     if not supabase:
         raise HTTPException(status_code=503, detail="Database not connected")
     try:
@@ -227,7 +311,6 @@ def get_customer_by_id(customer_id: int):
 
 @app.get("/customers/{customer_id}/predictions")
 def get_customer_predictions(customer_id: int):
-    """Fetch prediction history for a customer."""
     if not supabase:
         raise HTTPException(status_code=503, detail="Database not connected")
     try:
@@ -237,7 +320,7 @@ def get_customer_predictions(customer_id: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 # ------------------------------
-# 9. PREDICTION ENDPOINTS
+# 10. PREDICTION ENDPOINTS
 # ------------------------------
 @app.get("/")
 def root():
@@ -315,7 +398,7 @@ def predict_and_save(customer: CustomerInput, customer_name: str = None, custome
                     "payment_method": customer.PaymentMethod,
                     "monthly_charges": customer.MonthlyCharges,
                     "total_charges": customer.TotalCharges,
-                    "last_login": "2026-09-01"
+                    "last_login": datetime.now().strftime("%Y-%m-%d")
                 }
                 inserted = supabase.table("customers").insert(new_customer).execute()
                 if inserted.data:
