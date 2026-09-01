@@ -1,12 +1,16 @@
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
 
-fastapi
-uvicorn
-scikit-learn
-xgboost
-joblib
-pandas
-numpy
-shap
-python-multipart
-supabase
-python-dotenv
+pydantic==2.10.5
+python-dotenv==1.0.1
+python-multipart==0.0.20
+
+supabase==2.11.0
+
+pandas==2.2.3
+numpy==2.2.1
+
+scikit-learn==1.6.1
+xgboost==2.1.3
+joblib==1.4.2
+shap==0.46.0
