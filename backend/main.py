@@ -37,9 +37,7 @@ except:
 # Import our helper functions from the file we uploaded
 # But since we need to import, we'll just define them here to avoid import issues
 # Or we can import from prediction_functions.py
-import sys
-sys.path.append(os.path.dirname(__file__))
-from prediction_functions import predict_with_explanation
+from models.prediction_functions import predict_with_explanation
 
 # ------------------------------
 # 2. FastAPI App Setup
