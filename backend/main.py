@@ -20,33 +20,40 @@ scaler = joblib.load(os.path.join(MODELS_DIR, "scaler.pkl"))
 with open(os.path.join(MODELS_DIR, "feature_names.json"), "r") as f:
     expected_features = json.load(f)
 
-# Load SHAP explainer (if fails, we'll still run predictions without SHAP)
+# ------------------------------
+# 2. FIXED SHAP LOADING (No syntax error)
+# ------------------------------
+shap_available = False
+explainer = None
+
 try:
     import shap
-    explainer = joblib.load(os.path.join(MODELS_DIR, "shap_explainer.pkl"))
-    shap_available = True
-except:
-    import shap
-    explainer = shap.TreeExplainer(model)
-    shap_available = True
-    print("⚠️ SHAP explainer re-created from model.")
+    try:
+        # Try to load the pre-saved explainer
+        explainer = joblib.load(os.path.join(MODELS_DIR, "shap_explainer.pkl"))
+        shap_available = True
+        print("✅ SHAP explainer loaded from disk.")
+    except FileNotFoundError:
+        # If file not found, create it from the model
+        explainer = shap.TreeExplainer(model)
+        shap_available = True
+        print("⚠️ SHAP explainer re-created from model (file not found).")
 except Exception as e:
+    # If shap is not installed or any other error, we fallback gracefully
     shap_available = False
     explainer = None
-    print(f"⚠️ SHAP not available: {e}")
+    print(f"⚠️ SHAP not available (proceeding without explanations): {e}")
 
 # ------------------------------
-# 2. BULLETPROOF PREPROCESSING
+# 3. BULLETPROOF PREPROCESSING
 # ------------------------------
 def preprocess_customer(input_dict):
     """
     Converts raw JSON into the exact feature set the model expects.
-    Uses a default template to ensure ALL columns exist.
     """
-    # 1. Define default values for ALL categorical columns
-    # (All possible columns from Telco dataset, set to 'No' by default)
+    # Default template with ALL possible columns
     default_data = {
-        'gender': 'Male',               # Will be overwritten
+        'gender': 'Male',
         'SeniorCitizen': 0,
         'Partner': 'No',
         'Dependents': 'No',
@@ -67,18 +74,17 @@ def preprocess_customer(input_dict):
         'TotalCharges': 0.0
     }
     
-    # 2. Override defaults with user input
+    # Override defaults with user input
     for key, value in input_dict.items():
         default_data[key] = value
     
-    # 3. Create DataFrame from the merged data
     df = pd.DataFrame([default_data])
     
-    # 4. Fix TotalCharges (convert to numeric, handle errors)
+    # Fix TotalCharges
     df['TotalCharges'] = pd.to_numeric(df['TotalCharges'], errors='coerce')
-    df['TotalCharges'] = df['TotalCharges'].fillna(0)  # Safe assignment (no inplace)
+    df['TotalCharges'] = df['TotalCharges'].fillna(0)
     
-    # 5. Apply one-hot encoding to categorical columns
+    # One-hot encoding
     categorical_cols = [
         'gender', 'Partner', 'Dependents', 'PhoneService', 'MultipleLines',
         'InternetService', 'OnlineSecurity', 'OnlineBackup', 'DeviceProtection',
@@ -87,18 +93,17 @@ def preprocess_customer(input_dict):
     ]
     df_encoded = pd.get_dummies(df, columns=categorical_cols, drop_first=True)
     
-    # 6. Ensure all expected columns are present (fill missing with 0)
+    # Ensure all expected columns exist
     for col in expected_features:
         if col not in df_encoded.columns:
             df_encoded[col] = 0
     
-    # 7. Reorder columns exactly as the model expects
+    # Reorder
     df_encoded = df_encoded[expected_features]
-    
     return df_encoded
 
 # ------------------------------
-# 3. Helper Functions
+# 4. HELPER FUNCTIONS
 # ------------------------------
 def get_risk_category(probability):
     if probability < 0.30:
@@ -111,7 +116,6 @@ def get_risk_category(probability):
         return {'label': 'Critical Risk', 'color': '🔴', 'bg_color': 'bg-red-600', 'action': 'Immediate intervention required!'}
 
 def get_human_reasons(df_encoded, shap_values, feature_names, top_n=3):
-    """Convert SHAP values into plain English reasons."""
     if shap_values is None:
         return ["AI explanation unavailable, but risk score is reliable."]
     
@@ -150,7 +154,7 @@ def get_human_reasons(df_encoded, shap_values, feature_names, top_n=3):
         return ["AI explanation temporarily unavailable."]
 
 # ------------------------------
-# 4. FastAPI App
+# 5. FASTAPI APP
 # ------------------------------
 app = FastAPI(
     title="AI Customer Retention Platform API",
@@ -167,7 +171,7 @@ app.add_middleware(
 )
 
 # ------------------------------
-# 5. Schemas
+# 6. SCHEMAS
 # ------------------------------
 class CustomerInput(BaseModel):
     gender: str
@@ -190,7 +194,7 @@ class PredictionResponse(BaseModel):
     recommendation: str
 
 # ------------------------------
-# 6. Endpoints
+# 7. ENDPOINTS
 # ------------------------------
 @app.get("/")
 def root():
@@ -205,20 +209,20 @@ def predict_churn(customer: CustomerInput):
     try:
         input_dict = customer.dict()
         
-        # Step 1: Preprocess using the bulletproof method
+        # Preprocess
         processed_df = preprocess_customer(input_dict)
         
-        # Step 2: Scale
+        # Scale
         scaled_data = scaler.transform(processed_df)
         
-        # Step 3: Predict probability
+        # Predict
         prob = model.predict_proba(scaled_data)[0][1]
         prob_percent = prob * 100
         
-        # Step 4: Risk
+        # Risk
         risk_info = get_risk_category(prob)
         
-        # Step 5: SHAP Reasons (with graceful fallback)
+        # SHAP Reasons (with fallback)
         shap_vals = None
         if shap_available and explainer is not None:
             try:
@@ -227,7 +231,7 @@ def predict_churn(customer: CustomerInput):
                 shap_vals = None
         reasons = get_human_reasons(processed_df, shap_vals, expected_features)
         
-        # Step 6: Recommendation
+        # Recommendation
         recommendation = risk_info['action']
         reasons_text = " ".join(reasons).lower()
         if "contract" in reasons_text:
@@ -248,7 +252,6 @@ def predict_churn(customer: CustomerInput):
         )
     
     except Exception as e:
-        # Log the full error to Render logs
         print(f"🔥 ERROR: {str(e)}")
         import traceback
         traceback.print_exc()
