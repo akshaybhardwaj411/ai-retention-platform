@@ -14,6 +14,23 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // State for AI Prediction Tester
+  const [testCustomer, setTestCustomer] = useState({
+    gender: 'Male',
+    SeniorCitizen: 0,
+    Partner: 'Yes',
+    Dependents: 'No',
+    tenure: 12,
+    PhoneService: 'Yes',
+    InternetService: 'Fiber optic',
+    Contract: 'Month-to-month',
+    PaymentMethod: 'Electronic check',
+    MonthlyCharges: 85.5,
+    TotalCharges: 1020.5
+  });
+  const [predictionResult, setPredictionResult] = useState(null);
+  const [predicting, setPredicting] = useState(false);
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -46,6 +63,25 @@ const Dashboard = () => {
     { month: 'Aug', churn: 49 },
     { month: 'Sep', churn: 44 },
   ];
+
+  // Handle AI Prediction Test
+  const handlePredict = async () => {
+    try {
+      setPredicting(true);
+      const response = await fetch('https://ai-retention-backend.onrender.com/predict', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(testCustomer)
+      });
+      const data = await response.json();
+      setPredictionResult(data);
+    } catch (error) {
+      console.error('Prediction error:', error);
+      alert('Failed to get prediction. Is your backend running?');
+    } finally {
+      setPredicting(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -84,6 +120,51 @@ const Dashboard = () => {
           <p className="text-gray-500 text-sm">Retention Rate</p>
           <p className="text-2xl font-bold text-purple-600">{metrics.retentionRate}%</p>
         </div>
+      </div>
+
+      {/* AI Prediction Tester */}
+      <div className="bg-white p-4 rounded-lg shadow-md mb-6">
+        <h2 className="font-semibold text-lg mb-4">🧪 Test AI Prediction</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+          <input 
+            className="border rounded p-2 text-sm"
+            placeholder="Tenure"
+            type="number"
+            value={testCustomer.tenure}
+            onChange={(e) => setTestCustomer({...testCustomer, tenure: parseInt(e.target.value) || 0})}
+          />
+          <input 
+            className="border rounded p-2 text-sm"
+            placeholder="Monthly Charges"
+            type="number"
+            value={testCustomer.MonthlyCharges}
+            onChange={(e) => setTestCustomer({...testCustomer, MonthlyCharges: parseFloat(e.target.value) || 0})}
+          />
+          <select 
+            className="border rounded p-2 text-sm"
+            value={testCustomer.Contract}
+            onChange={(e) => setTestCustomer({...testCustomer, Contract: e.target.value})}
+          >
+            <option value="Month-to-month">Month-to-month</option>
+            <option value="One year">One year</option>
+            <option value="Two year">Two year</option>
+          </select>
+          <button 
+            onClick={handlePredict}
+            disabled={predicting}
+            className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 transition disabled:opacity-50"
+          >
+            {predicting ? 'Predicting...' : '🔮 Predict Churn'}
+          </button>
+        </div>
+        {predictionResult && (
+          <div className={`p-4 rounded ${predictionResult.risk_level === 'Low Risk' ? 'bg-green-50' : predictionResult.risk_level === 'Medium Risk' ? 'bg-yellow-50' : 'bg-red-50'}`}>
+            <p><strong>Probability:</strong> {predictionResult.probability}%</p>
+            <p><strong>Risk Level:</strong> <span className="font-bold">{predictionResult.risk_color} {predictionResult.risk_level}</span></p>
+            <p><strong>Reasons:</strong> {predictionResult.reasons?.join(', ')}</p>
+            <p><strong>Recommendation:</strong> {predictionResult.recommendation}</p>
+          </div>
+        )}
       </div>
 
       {/* Chart */}
