@@ -1,143 +1,494 @@
 import api from './axios';
 
-// Fetch real-time analytics from backend
+/**
+ * Centralized API service layer for the
+ * AI Customer Retention Platform.
+ *
+ * Important:
+ * - No mock/fallback business data is returned.
+ * - Backend remains the single source of truth.
+ * - API errors are logged and propagated to the UI.
+ */
+
+/* =========================================================
+   HELPERS
+   ========================================================= */
+
+/**
+ * Extract a readable error message from an Axios error.
+ */
+const getErrorMessage = (error, fallbackMessage) => {
+  return (
+    error?.response?.data?.detail ||
+    error?.response?.data?.message ||
+    error?.message ||
+    fallbackMessage
+  );
+};
+
+/**
+ * Log API errors consistently.
+ */
+const handleApiError = (context, error) => {
+  console.error(`${context}:`, {
+    message: getErrorMessage(error, 'Unknown API error'),
+    status: error?.response?.status,
+    data: error?.response?.data,
+  });
+};
+
+
+/* =========================================================
+   ANALYTICS
+   ========================================================= */
+
+/**
+ * Fetch real-time analytics from the backend.
+ */
 export const getAnalytics = async () => {
   try {
     const response = await api.get('/analytics');
+
     return response.data;
   } catch (error) {
-    console.error('Error fetching analytics:', error);
-    return null;
+    handleApiError(
+      'Error fetching analytics',
+      error
+    );
+
+    throw error;
   }
 };
 
-// Fetch dashboard metrics (uses analytics now)
+
+/**
+ * Fetch dashboard metrics.
+ *
+ * The backend analytics endpoint is the
+ * single source of truth.
+ */
 export const getMetrics = async () => {
   try {
     const data = await getAnalytics();
-    if (data) {
-      return {
-        totalCustomers: data.totalCustomers || 0,
-        activeCustomers: data.activeCustomers || 0,
-        highRisk: data.highRisk || 0,
-        retentionRate: data.retentionRate || 0,
-        revenue: data.revenue || 0,
-        revenueLoss: data.revenueLoss || 0,
-        churnTrend: data.churnTrend || []
-      };
-    }
-    // Fallback mock data
+
     return {
-      totalCustomers: 10450,
-      activeCustomers: 8920,
-      highRisk: 540,
-      retentionRate: 94.2,
-      revenue: 1240000,
-      revenueLoss: 25000,
-      churnTrend: [
-        { month: 'Apr', churn: 42 },
-        { month: 'May', churn: 38 },
-        { month: 'Jun', churn: 45 },
-        { month: 'Jul', churn: 51 },
-        { month: 'Aug', churn: 49 },
-        { month: 'Sep', churn: 44 }
-      ]
+      totalCustomers: Number(
+        data?.totalCustomers ?? 0
+      ),
+
+      activeCustomers: Number(
+        data?.activeCustomers ?? 0
+      ),
+
+      highRisk: Number(
+        data?.highRisk ?? 0
+      ),
+
+      criticalRisk: Number(
+        data?.criticalRisk ?? 0
+      ),
+
+      retentionRate: Number(
+        data?.retentionRate ?? 0
+      ),
+
+      revenue: Number(
+        data?.revenue ?? 0
+      ),
+
+      revenueLoss: Number(
+        data?.revenueLoss ?? 0
+      ),
+
+      predictionsCount: Number(
+        data?.predictionsCount ?? 0
+      ),
+
+      churnTrend: Array.isArray(
+        data?.churnTrend
+      )
+        ? data.churnTrend
+        : [],
     };
   } catch (error) {
-    console.error('Error fetching metrics:', error);
-    return null;
+    handleApiError(
+      'Error fetching metrics',
+      error
+    );
+
+    throw error;
   }
 };
 
-// Fetch all customers from the backend
+
+/* =========================================================
+   CUSTOMERS
+   ========================================================= */
+
+/**
+ * Fetch all customers from the backend.
+ */
 export const getAllCustomers = async () => {
   try {
-    const response = await api.get('/customers');
-    return response.data.customers || [];
-  } catch (error) {
-    console.error('Error fetching customers:', error);
-    return [];
-  }
-};
+    const response = await api.get(
+      '/customers'
+    );
 
-// Fetch a single customer by ID
-export const getCustomerById = async (id) => {
-  try {
-    const response = await api.get(`/customers/${id}`);
-    return response.data;
-  } catch (error) {
-    console.error('Error fetching customer:', error);
-    return null;
-  }
-};
+    const customers = response.data?.customers;
 
-// Fetch prediction history for a customer
-export const getCustomerPredictions = async (id) => {
-  try {
-    const response = await api.get(`/customers/${id}/predictions`);
-    return response.data.predictions || [];
+    return Array.isArray(customers)
+      ? customers
+      : [];
   } catch (error) {
-    console.error('Error fetching predictions:', error);
-    return [];
-  }
-};
+    handleApiError(
+      'Error fetching customers',
+      error
+    );
 
-// Predict churn for a single customer
-export const predictChurn = async (customerData) => {
-  try {
-    const response = await api.post('/predict', customerData);
-    return response.data;
-  } catch (error) {
-    console.error('Error predicting churn:', error);
     throw error;
   }
 };
 
-// Predict and save to database
-export const predictAndSave = async (customerData, customerName, customerEmail) => {
+
+/**
+ * Fetch a single customer by database ID.
+ */
+export const getCustomerById = async (id) => {
+  if (
+    id === undefined ||
+    id === null ||
+    id === ''
+  ) {
+    throw new Error(
+      'Customer ID is required.'
+    );
+  }
+
+  try {
+    const response = await api.get(
+      `/customers/${encodeURIComponent(id)}`
+    );
+
+    return response.data;
+  } catch (error) {
+    handleApiError(
+      'Error fetching customer',
+      error
+    );
+
+    throw error;
+  }
+};
+
+
+/**
+ * Fetch prediction history for a customer.
+ */
+export const getCustomerPredictions = async (
+  id
+) => {
+  if (
+    id === undefined ||
+    id === null ||
+    id === ''
+  ) {
+    throw new Error(
+      'Customer ID is required.'
+    );
+  }
+
+  try {
+    const response = await api.get(
+      `/customers/${encodeURIComponent(id)}/predictions`
+    );
+
+    const predictions =
+      response.data?.predictions;
+
+    return Array.isArray(predictions)
+      ? predictions
+      : [];
+  } catch (error) {
+    handleApiError(
+      'Error fetching customer predictions',
+      error
+    );
+
+    throw error;
+  }
+};
+
+
+/* =========================================================
+   PREDICTION
+   ========================================================= */
+
+/**
+ * Predict churn for a single customer.
+ */
+export const predictChurn = async (
+  customerData
+) => {
+  if (
+    !customerData ||
+    typeof customerData !== 'object'
+  ) {
+    throw new Error(
+      'Valid customer data is required.'
+    );
+  }
+
   try {
     const response = await api.post(
-      `/predict-and-save?customer_name=${encodeURIComponent(customerName)}&customer_email=${encodeURIComponent(customerEmail)}`,
+      '/predict',
       customerData
     );
+
     return response.data;
   } catch (error) {
-    console.error('Error predicting and saving:', error);
+    handleApiError(
+      'Error predicting churn',
+      error
+    );
+
     throw error;
   }
 };
 
-// Fetch top high-risk customers
+
+/**
+ * Predict churn and save the result
+ * to the database.
+ */
+export const predictAndSave = async (
+  customerData,
+  customerName = '',
+  customerEmail = ''
+) => {
+  if (
+    !customerData ||
+    typeof customerData !== 'object'
+  ) {
+    throw new Error(
+      'Valid customer data is required.'
+    );
+  }
+
+  try {
+    const response = await api.post(
+      '/predict-and-save',
+      customerData,
+      {
+        params: {
+          customer_name: customerName,
+          customer_email: customerEmail,
+        },
+      }
+    );
+
+    return response.data;
+  } catch (error) {
+    handleApiError(
+      'Error predicting and saving customer',
+      error
+    );
+
+    throw error;
+  }
+};
+
+
+/* =========================================================
+   HIGH-RISK CUSTOMERS
+   ========================================================= */
+
+/**
+ * Parse prediction reasons safely.
+ *
+ * The backend may return reasons as:
+ * - JSON string
+ * - Array
+ * - null
+ */
+const parseReasons = (reasons) => {
+  if (Array.isArray(reasons)) {
+    return reasons;
+  }
+
+  if (
+    typeof reasons === 'string' &&
+    reasons.trim()
+  ) {
+    try {
+      const parsed = JSON.parse(
+        reasons
+      );
+
+      if (Array.isArray(parsed)) {
+        return parsed;
+      }
+
+      return [reasons];
+    } catch {
+      return [reasons];
+    }
+  }
+
+  return [];
+};
+
+
+/**
+ * Fetch top high-risk customers.
+ *
+ * NOTE:
+ * This currently uses the existing backend APIs.
+ * A dedicated /customers/high-risk endpoint
+ * can be introduced later to make this operation
+ * more efficient.
+ */
 export const getHighRiskCustomers = async () => {
   try {
-    const customers = await getAllCustomers();
-    // Fetch predictions for each customer to calculate risk
-    const highRiskList = [];
-    for (const c of customers.slice(0, 10)) {
-      const preds = await getCustomerPredictions(c.id);
-      if (preds.length > 0) {
-        const latest = preds[0];
-        if (latest.churn_probability >= 60) {
-          highRiskList.push({
-            id: c.id,
-            name: c.name || 'Unknown',
-            email: c.email,
-            risk: Math.round(latest.churn_probability),
-            reason: latest.reasons ? JSON.parse(latest.reasons)[0] || 'AI detected risk' : 'AI detected risk'
-          });
-        }
-      }
+    const customers =
+      await getAllCustomers();
+
+    if (!customers.length) {
+      return [];
     }
-    // Sort by risk descending and take top 5
-    highRiskList.sort((a, b) => b.risk - a.risk);
-    return highRiskList.slice(0, 5);
+
+    const highRiskList = [];
+
+    /*
+     * We intentionally limit the number of
+     * prediction-history requests for now
+     * because the current backend does not
+     * provide a bulk high-risk endpoint.
+     *
+     * This is NOT mock data.
+     */
+    const customersToCheck =
+      customers.slice(0, 50);
+
+    const predictionResults =
+      await Promise.allSettled(
+        customersToCheck.map(
+          async (customer) => {
+            const predictions =
+              await getCustomerPredictions(
+                customer.id
+              );
+
+            return {
+              customer,
+              predictions,
+            };
+          }
+        )
+      );
+
+    for (
+      const result of predictionResults
+    ) {
+      if (
+        result.status !== 'fulfilled'
+      ) {
+        continue;
+      }
+
+      const {
+        customer,
+        predictions,
+      } = result.value;
+
+      if (!predictions.length) {
+        continue;
+      }
+
+      /*
+       * Backend already returns prediction
+       * history ordered newest first.
+       */
+      const latest =
+        predictions[0];
+
+      let risk =
+        Number(
+          latest?.churn_probability ?? 0
+        );
+
+      /*
+       * Support both:
+       * 0.87
+       * and
+       * 87
+       */
+      if (
+        risk > 0 &&
+        risk <= 1
+      ) {
+        risk *= 100;
+      }
+
+      if (risk < 60) {
+        continue;
+      }
+
+      const reasons =
+        parseReasons(
+          latest?.reasons
+        );
+
+      highRiskList.push({
+        id: customer.id,
+
+        name:
+          customer.name ||
+          'Unknown Customer',
+
+        email:
+          customer.email ||
+          '',
+
+        risk: Math.round(
+          Math.min(
+            Math.max(risk, 0),
+            100
+          )
+        ),
+
+        riskLevel:
+          latest?.risk_level ||
+          (
+            risk >= 80
+              ? 'Critical Risk'
+              : 'High Risk'
+          ),
+
+        reason:
+          reasons[0] ||
+          'AI detected elevated churn risk.',
+      });
+    }
+
+    /*
+     * Highest risk first.
+     */
+    highRiskList.sort(
+      (a, b) =>
+        b.risk - a.risk
+    );
+
+    return highRiskList.slice(
+      0,
+      5
+    );
+
   } catch (error) {
-    console.error('Error fetching high-risk customers:', error);
-    // Fallback mock data
-    return [
-      { id: 1, name: 'Rahul Singh', email: 'rahul@email.com', risk: 92, reason: 'Month-to-month contract' },
-      { id: 2, name: 'Vikram Mehta', email: 'vikram@email.com', risk: 88, reason: 'High charges' },
-      { id: 3, name: 'Deepa Nair', email: 'deepa@email.com', risk: 81, reason: 'No login for 40 days' },
-    ];
+    handleApiError(
+      'Error fetching high-risk customers',
+      error
+    );
+
+    throw error;
   }
 };
